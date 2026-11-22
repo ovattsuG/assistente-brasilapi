@@ -1,0 +1,22 @@
+sequenceDiagram
+    autonumber
+    actor U as Usuário
+    participant A as Aplicação (Streamlit + orquestrador)
+    participant L as Gemini (LLM)
+    participant B as BrasilAPI
+
+    U->>A: "Qual a cidade do CEP 36033-270?"
+    A->>L: pergunta + histórico + 4 ferramentas declaradas
+    L-->>A: function_call consultar_cep {cep: "36033270"}
+    Note over A: Valida: ferramenta existe? args no esquema?<br/>CEP tem 8 dígitos?
+    A->>B: GET /api/cep/v2/36033270 (timeout 8s)
+    alt 200 OK
+        B-->>A: JSON {cep, state, city, neighborhood, street}
+        A->>A: normaliza campos e marca os ausentes
+    else 400 / 404 / 5xx / timeout
+        B-->>A: erro
+        A->>A: converte em {ok:false, tipo, mensagem}
+    end
+    A->>L: function_response (dados ou erro)
+    L-->>A: texto final em português
+    A-->>U: resposta + painel com ferramenta, HTTP, tempo e JSON

@@ -1,0 +1,33 @@
+flowchart LR
+    U(["👤 Usuário<br/>pergunta em linguagem natural"])
+
+    subgraph APP["Aplicação Python — Streamlit Cloud"]
+        direction TB
+        UI["<b>Interface</b><br/>app.py<br/>chat + painel 'Como cheguei nessa resposta'"]
+        AG["<b>Orquestrador</b><br/>agente.py<br/>laço de function calling (máx. 4 rodadas)<br/>histórico dos últimos 5 turnos"]
+        FE["<b>Catálogo de ferramentas</b><br/>ferramentas.py<br/>JSON Schema + validação de argumentos<br/>recusa ferramenta fora do catálogo"]
+        CL["<b>Cliente BrasilAPI</b><br/>brasilapi.py<br/>timeout 8s · 1 retry em falha transitória<br/>erros tipados · filtra campos"]
+        UI --> AG
+        AG -- "pedido de função<br/>(nome + args)" --> FE
+        FE -- "args validados" --> CL
+        CL -- "{ok, dados | erro}" --> AG
+    end
+
+    LLM[["🧠 Google Gemini<br/>gemini-3.8-flash<br/>(reserva: 3.5-flash-lite)"]]
+
+    subgraph BR["BrasilAPI (REST pública)"]
+        direction TB
+        E1["GET /cep/v2/{cep}"]
+        E2["GET /cnpj/v1/{cnpj}"]
+        E3["GET /feriados/v1/{ano}"]
+        E4["GET /ddd/v1/{ddd}"]
+    end
+
+    U <--> UI
+    AG <-- "pergunta + declarações das ferramentas<br/>⇄ function_call / texto final" --> LLM
+    CL --> E1 & E2 & E3 & E4
+
+    classDef app fill:#e8f1fb,stroke:#1f4e79,color:#0b2540
+    classDef ext fill:#fff4e5,stroke:#c77700,color:#3d2600
+    class UI,AG,FE,CL app
+    class LLM,E1,E2,E3,E4 ext
