@@ -164,3 +164,19 @@ def test_resposta_vazia_vira_erro_amigavel():
 def test_sem_chave():
     with pytest.raises(ErroLLM):
         Agente("", ["m1"])
+
+
+class ReadTimeout(Exception):
+    """Imita a exceção de timeout do cliente HTTP do SDK."""
+
+
+def test_timeout_do_modelo_usa_reserva():
+    cliente = ClienteRoteirizado([ReadTimeout("lento"), resposta_texto("ok")])
+    r = Agente("x", ["principal", "reserva"], cliente=cliente).responder("oi")
+    assert r.modelo == "reserva"
+
+
+def test_timeout_em_todos_os_modelos_vira_erro_amigavel():
+    cliente = ClienteRoteirizado([ReadTimeout(), ReadTimeout()])
+    with pytest.raises(ErroLLM, match="demorou demais"):
+        Agente("x", ["principal", "reserva"], cliente=cliente).responder("oi")
