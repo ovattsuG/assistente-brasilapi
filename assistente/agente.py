@@ -26,7 +26,7 @@ log = logging.getLogger(__name__)
 MAX_RODADAS = 4
 # O SDK não tem timeout por padrão: sem isso, uma chamada travada deixa a
 # interface girando para sempre. Valor em milissegundos.
-TIMEOUT_LLM_MS = 30_000
+TIMEOUT_LLM_MS = 20_000
 
 INSTRUCAO_SISTEMA = """Você é um assistente de consultas a dados públicos brasileiros, integrado à BrasilAPI.
 Data de hoje: {hoje}.
@@ -84,8 +84,9 @@ class Agente:
             api_key=api_key,
             http_options=types.HttpOptions(
                 timeout=TIMEOUT_LLM_MS,
-                # 1 retry curto no SDK; o fallback de modelo cuida do resto.
-                retry_options=types.HttpRetryOptions(attempts=2, initial_delay=1.0, max_delay=4.0),
+                # Sem retry no SDK: repetir um 504 dobra a espera do usuário.
+                # Quem trata falha é o fallback para o modelo reserva.
+                retry_options=types.HttpRetryOptions(attempts=1),
             ),
         )
         self._modelos = modelos
