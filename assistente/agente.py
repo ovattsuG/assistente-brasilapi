@@ -24,6 +24,9 @@ from .ferramentas import CATALOGO, declaracoes, executar_ferramenta
 log = logging.getLogger(__name__)
 
 MAX_RODADAS = 4
+# O SDK não tem timeout por padrão: sem isso, uma chamada travada deixa a
+# interface girando para sempre. Valor em milissegundos.
+TIMEOUT_LLM_MS = 30_000
 
 INSTRUCAO_SISTEMA = """Você é um assistente de consultas a dados públicos brasileiros, integrado à BrasilAPI.
 Data de hoje: {hoje}.
@@ -77,7 +80,14 @@ class Agente:
             raise ErroLLM("Chave do Gemini não configurada (GEMINI_API_KEY).")
         if not modelos:
             raise ValueError("Informe ao menos um modelo.")
-        self._cliente = cliente or genai.Client(api_key=api_key)
+        self._cliente = cliente or genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=TIMEOUT_LLM_MS,
+                # 1 retry curto no SDK; o fallback de modelo cuida do resto.
+                retry_options=types.HttpRetryOptions(attempts=2, initial_delay=1.0, max_delay=4.0),
+            ),
+        )
         self._modelos = modelos
         self._config_base = dict(
             tools=[types.Tool(function_declarations=[types.FunctionDeclaration(**d) for d in declaracoes()])],
@@ -150,18 +160,30 @@ class Agente:
             **self._config_base,
         )
         ultimo: errors.APIError | None = None
+        ultimo_timeout: Exception | None = None
         for modelo in self._modelos:
+            inicio = time.perf_counter()
+            log.info("Chamando Gemini %s (%s conteúdos no histórico)", modelo, len(conteudos))
             try:
-                return self._cliente.models.generate_content(model=modelo, contents=conteudos, config=config), modelo
+                resposta = self._cliente.models.generate_content(model=modelo, contents=conteudos, config=config)
+                log.info("Gemini %s respondeu em %sms", modelo, round((time.perf_counter() - inicio) * 1000))
+                return resposta, modelo
             except errors.APIError as exc:
                 ultimo = exc
                 log.warning("Gemini %s falhou: %s %s", modelo, exc.code, exc.message)
                 if exc.code in (404, 429, 500, 503, 504):
                     continue  # vale tentar o próximo modelo
                 break
-            except Exception as exc:  # rede/DNS/timeout do httpx
+            except Exception as exc:  # rede/DNS/timeout do cliente HTTP
+                if "timeout" in type(exc).__name__.lower():
+                    log.warning("Gemini %s excedeu %ss; tentando o próximo modelo", modelo, TIMEOUT_LLM_MS // 1000)
+                    ultimo_timeout = exc
+                    continue
                 log.exception("Falha de rede ao chamar o Gemini")
                 raise ErroLLM("Não consegui me comunicar com o Gemini. Verifique a conexão e tente de novo.") from exc
+
+        if ultimo is None and ultimo_timeout is not None:
+            raise ErroLLM("O Gemini demorou demais para responder. Tente novamente em instantes.") from ultimo_timeout
 
         raise ErroLLM(_traduzir_erro(ultimo)) from ultimo
 
