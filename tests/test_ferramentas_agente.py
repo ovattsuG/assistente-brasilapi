@@ -180,3 +180,17 @@ def test_timeout_em_todos_os_modelos_vira_erro_amigavel():
     cliente = ClienteRoteirizado([ReadTimeout(), ReadTimeout()])
     with pytest.raises(ErroLLM, match="demorou demais"):
         Agente("x", ["principal", "reserva"], cliente=cliente).responder("oi")
+
+
+def test_sobrecarga_503_tenta_mesmo_modelo_de_novo(monkeypatch):
+    monkeypatch.setattr(mod_agente, "ESPERA_SOBRECARGA_S", 0)
+    cliente = ClienteRoteirizado([errors.ServerError(503, {"error": {"message": "high demand"}}), resposta_texto("ok")])
+    r = Agente("x", ["principal", "reserva"], cliente=cliente).responder("oi")
+    assert [c["model"] for c in cliente.chamadas] == ["principal", "principal"]
+    assert r.modelo == "principal"
+
+
+def test_cota_429_nao_repete_mesmo_modelo():
+    cliente = ClienteRoteirizado([errors.ClientError(429, {"error": {"message": "quota"}}), resposta_texto("ok")])
+    Agente("x", ["principal", "reserva"], cliente=cliente).responder("oi")
+    assert [c["model"] for c in cliente.chamadas] == ["principal", "reserva"]
