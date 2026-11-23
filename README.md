@@ -4,7 +4,7 @@ Atividade integradora do semestre — Integração de Software · UniAcademia.
 
 Aplicação que recebe uma pergunta em **linguagem natural**, usa o **Google Gemini** para interpretar a intenção, deixa a **aplicação** escolher, validar e executar a ferramenta certa contra a **BrasilAPI** (consulta real, sem mocks) e devolve uma resposta organizada, com **tratamento de erros**.
 
-**App online:** _LINK_DO_STREAMLIT_  
+**App online:** https://assistente-brasilapi-gustavo.streamlit.app/  
 **Vídeo de demonstração:** _LINK_DO_VIDEO_
 
 ## Como os requisitos foram atendidos
@@ -78,7 +78,7 @@ A chave é gratuita em <https://aistudio.google.com/apikey>. Modelos configuráv
 pytest -q
 ```
 
-37 testes cobrem o cliente HTTP (sucesso, 400, 404, 5xx, timeout com retry, JSON inválido, resposta incompleta), a validação do catálogo de ferramentas e o laço do agente (fluxo completo, ausência de parâmetro, limite de rodadas, fallback de modelo, chave inválida). Nos testes, a rede e o Gemini são substituídos por respostas roteirizadas; **a aplicação em execução sempre consulta a BrasilAPI e o Gemini reais.**
+41 testes cobrem o cliente HTTP (sucesso, 400, 404, 5xx, timeout com retry, JSON inválido, resposta incompleta), a validação do catálogo de ferramentas e o laço do agente (fluxo completo, ausência de parâmetro, limite de rodadas, fallback de modelo, chave inválida, sobrecarga 503 com nova tentativa, timeout). Nos testes, a rede e o Gemini são substituídos por respostas roteirizadas; **a aplicação em execução sempre consulta a BrasilAPI e o Gemini reais.**
 
 ## Limitações conhecidas
 
