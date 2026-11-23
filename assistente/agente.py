@@ -27,6 +27,7 @@ MAX_RODADAS = 4
 # O SDK não tem timeout por padrão: sem isso, uma chamada travada deixa a
 # interface girando para sempre. Valor em milissegundos.
 TIMEOUT_LLM_MS = 20_000
+ESPERA_SOBRECARGA_S = 1.5
 
 INSTRUCAO_SISTEMA = """Você é um assistente de consultas a dados públicos brasileiros, integrado à BrasilAPI.
 Data de hoje: {hoje}.
@@ -162,18 +163,27 @@ class Agente:
         )
         ultimo: errors.APIError | None = None
         ultimo_timeout: Exception | None = None
-        for modelo in self._modelos:
+        # Cada modelo ganha 1 nova tentativa rápida em sobrecarga (500/503):
+        # no free tier esses picos costumam durar poucos segundos.
+        tentativas = [(m, n) for m in self._modelos for n in (1, 2)]
+        for modelo, tentativa in tentativas:
+            if tentativa == 2 and not (isinstance(ultimo, errors.APIError) and ultimo.code in (500, 503)
+                                       and getattr(ultimo, "_modelo", None) == modelo):
+                continue
+            if tentativa == 2:
+                time.sleep(ESPERA_SOBRECARGA_S)
             inicio = time.perf_counter()
-            log.info("Chamando Gemini %s (%s conteúdos no histórico)", modelo, len(conteudos))
+            log.info("Chamando Gemini %s (tentativa %s, %s conteúdos)", modelo, tentativa, len(conteudos))
             try:
                 resposta = self._cliente.models.generate_content(model=modelo, contents=conteudos, config=config)
                 log.info("Gemini %s respondeu em %sms", modelo, round((time.perf_counter() - inicio) * 1000))
                 return resposta, modelo
             except errors.APIError as exc:
+                exc._modelo = modelo
                 ultimo = exc
                 log.warning("Gemini %s falhou: %s %s", modelo, exc.code, exc.message)
                 if exc.code in (404, 429, 500, 503, 504):
-                    continue  # vale tentar o próximo modelo
+                    continue  # vale tentar de novo / o próximo modelo
                 break
             except Exception as exc:  # rede/DNS/timeout do cliente HTTP
                 if "timeout" in type(exc).__name__.lower():
