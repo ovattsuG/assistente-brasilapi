@@ -102,8 +102,8 @@ def main() -> None:
     st.session_state.setdefault("turnos_modelo", [])
     st.session_state.setdefault("perguntas_feitas", 0)
 
-    modelos = tuple(m for m in (ler_config("GEMINI_MODEL", "gemini-3.8-flash"),
-                                ler_config("GEMINI_MODEL_RESERVA", "gemini-3.5-flash-lite")) if m)
+    modelos = tuple(m for m in (ler_config("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+                                ler_config("GEMINI_MODEL_RESERVA", "gemini-3.8-flash")) if m)
     api_key = ler_config("GEMINI_API_KEY")
 
     with st.sidebar:
